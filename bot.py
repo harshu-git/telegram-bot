@@ -1,5 +1,5 @@
 import os
-import yt_dlp
+import requests
 
 from telegram import Update
 from telegram.ext import (
@@ -16,51 +16,41 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
-        "🎬 Send YouTube video link"
+        "🎬 Send YouTube link"
     )
 
 
-async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def get_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     url = update.message.text.strip()
 
     msg = await update.message.reply_text(
-        "📥 Downloading..."
+        "📥 Processing..."
     )
 
     try:
 
-        if not os.path.exists("downloads"):
-            os.makedirs("downloads")
-
-        ydl_opts = {
-            "format": "mp4",
-            "outtmpl": "downloads/%(title)s.%(ext)s",
-            "quiet": True,
-            "noplaylist": True,
-        }
-
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-
-            info = ydl.extract_info(url, download=True)
-
-            file_path = ydl.prepare_filename(info)
-
-        await msg.edit_text(
-            "📤 Uploading..."
+        response = requests.post(
+            "https://api.cobalt.tools/api/json",
+            json={
+                "url": url
+            }
         )
 
-        with open(file_path, "rb") as video:
+        data = response.json()
 
-            await update.message.reply_video(
-                video=video,
-                supports_streaming=True
+        if "url" not in data:
+
+            await msg.edit_text(
+                "❌ Failed to fetch video."
             )
 
-        os.remove(file_path)
+            return
+
+        download_url = data["url"]
 
         await msg.edit_text(
-            "✅ Done!"
+            f"✅ Download Link:\n\n{download_url}"
         )
 
     except Exception as e:
@@ -72,9 +62,6 @@ async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
 
-    if not BOT_TOKEN:
-        raise Exception("BOT_TOKEN missing!")
-
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(
@@ -84,11 +71,11 @@ def main():
     app.add_handler(
         MessageHandler(
             filters.TEXT & ~filters.COMMAND,
-            download_video
+            get_video
         )
     )
 
-    print("Bot started successfully...")
+    print("Bot running...")
 
     app.run_polling()
 
