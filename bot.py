@@ -1,5 +1,6 @@
 import os
-import requests
+
+from pytubefix import YouTube
 
 from telegram import Update
 from telegram.ext import (
@@ -20,37 +21,42 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-async def get_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     url = update.message.text.strip()
 
     msg = await update.message.reply_text(
-        "📥 Processing..."
+        "📥 Downloading..."
     )
 
     try:
 
-        response = requests.post(
-            "https://api.cobalt.tools/api/json",
-            json={
-                "url": url
-            }
+        if not os.path.exists("downloads"):
+            os.makedirs("downloads")
+
+        yt = YouTube(url)
+
+        stream = yt.streams.get_highest_resolution()
+
+        file_path = stream.download(
+            output_path="downloads"
         )
 
-        data = response.json()
+        await msg.edit_text(
+            "📤 Uploading..."
+        )
 
-        if "url" not in data:
+        with open(file_path, "rb") as video:
 
-            await msg.edit_text(
-                "❌ Failed to fetch video."
+            await update.message.reply_video(
+                video=video,
+                supports_streaming=True
             )
 
-            return
-
-        download_url = data["url"]
+        os.remove(file_path)
 
         await msg.edit_text(
-            f"✅ Download Link:\n\n{download_url}"
+            "✅ Done!"
         )
 
     except Exception as e:
@@ -71,7 +77,7 @@ def main():
     app.add_handler(
         MessageHandler(
             filters.TEXT & ~filters.COMMAND,
-            get_video
+            download_video
         )
     )
 
